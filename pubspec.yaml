@@ -1,0 +1,37 @@
+name: animind
+description: 동물 감정 인식 모바일 앱 - Kaggle Pets Facial Expression Dataset 기반
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  tflite_flutter: ^0.10.4
+  image_picker: ^1.0.7
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+  sqflite: ^2.3.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  permission_handler: ^11.3.0
+  image: ^4.1.7
+  path_provider: ^2.1.2
+  path: ^1.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  glados: ^1.1.1
+  build_runner: ^2.4.8
+  riverpod_generator: ^2.3.9
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/
