@@ -35,7 +35,7 @@
     - _Requirements: 1.1, 1.2, 1.3, 2.2, 3.1, 4.4, 7.3, 7.4_
 
 - [ ] 2. 이미지 입력 및 유효성 검증 구현
-  - [ ] 2.1 이미지 유효성 검증 로직 구현
+  - [x] 2.1 이미지 유효성 검증 로직 구현
     - `ImageValidator` 클래스 구현
     - 형식 검증: JPG, PNG만 허용, 나머지는 `ValidationErrorType.unsupportedFormat` 반환
     - 크기 검증: 10MB 초과 시 `ValidationErrorType.fileSizeExceeded` 반환
@@ -61,7 +61,7 @@
     - _Requirements: 1.6, 1.7_
 
 - [ ] 3. 전처리 서비스 구현
-  - [ ] 3.1 이미지 전처리 로직 구현
+  - [x] 3.1 이미지 전처리 로직 구현
     - `PreprocessorServiceImpl` 구현
     - 224x224 리사이즈 처리
     - 픽셀값 0.0~1.0 정규화
@@ -162,7 +162,7 @@
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 10. Python 학습 파이프라인 구현
-  - [ ] 10.1 데이터 증강기 구현
+  - [x] 10.1 데이터 증강기 구현
     - `training/data_augmentor.py` 생성
     - `DataAugmentor` 클래스 구현
     - `load_split()`: Master Folder 사전 분할 구조 로딩 (train/valid/test)

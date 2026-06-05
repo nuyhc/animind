@@ -52,6 +52,7 @@ build/
 
 # Python 관련
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -75,5 +76,6 @@ dist/
 *.pb
 
 # 기타
+.tmp/
 .DS_Store
 Thumbs.db
