@@ -30,6 +30,10 @@ dev_dependencies:
   glados: ^1.1.1
   build_runner: ^2.4.8
   riverpod_generator: ^4.0.3
+  plugin_platform_interface: ^2.1.0
+  image_picker_platform_interface: ^2.9.0
+  permission_handler_platform_interface: ^4.0.0
+  sqflite_common_ffi: ^2.3.3
 
 flutter:
   uses-material-design: true
