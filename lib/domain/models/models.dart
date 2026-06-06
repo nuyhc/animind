@@ -1,6 +1,7 @@
 /// 도메인 모델 barrel 파일
 ///
 /// 모든 도메인 모델을 단일 import로 사용할 수 있도록 내보낸다.
+library;
 export 'analysis_history_entry.dart';
 export 'cache_cleanup_result.dart';
 export 'classification_result.dart';

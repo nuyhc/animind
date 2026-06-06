@@ -129,16 +129,11 @@ void main() {
     });
 
     test('10MB 초과 파일은 fileSizeExceeded 오류를 반환한다', () {
-      // 10MB를 넘는 파일을 생성한다
+      // 10MB를 넘는 파일을 생성한다.
+      // 유효한 PNG를 무압축으로 만들어도 크기를 보장하기 어려우므로
+      // 더미 바이트로 11MB 파일을 직접 기록한다.
       final file = File('${tempDir.path}/large.png');
       final largeBytes = Uint8List(11 * 1024 * 1024); // 11MB
-      // PNG 헤더를 포함한 유효한 이미지를 만들기 어려우므로
-      // 큰 이미지를 만들어 테스트한다
-      final image = img.Image(width: 3000, height: 3000);
-      img.fill(image, color: img.ColorRgb8(128, 128, 128));
-      final bytes = img.encodePng(image, level: 0); // 무압축으로 크기 키움
-
-      // 실제 10MB가 넘지 않을 수 있으므로 더미 데이터로 대체
       file.writeAsBytesSync(largeBytes);
 
       // 확장자가 png이므로 형식은 통과하지만 크기에서 실패한다

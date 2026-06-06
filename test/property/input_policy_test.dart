@@ -97,7 +97,7 @@ void main() {
               reason: 'extremeLogits=$logits: 정확히 4개 예측 결과만 반환해야 한다');
 
           // isUncertain이 boolean으로만 표현됨 (거부 상태 아님)
-          expect(success.isUncertain is bool, isTrue,
+          expect(success.isUncertain, isA<bool>(),
               reason: 'extremeLogits=$logits: isUncertain은 boolean이어야 한다');
 
           // 결과의 각 예측이 유효한 감정 카테고리

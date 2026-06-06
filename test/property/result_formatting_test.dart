@@ -20,7 +20,6 @@ import 'dart:math';
 import 'package:glados/glados.dart';
 import 'package:animind/data/services/result_formatter_impl.dart';
 import 'package:animind/domain/models/models.dart';
-import 'package:animind/domain/models/emotion_mapping.dart';
 
 /// 최대값이 0.5 미만인 4개 확률 분포를 생성하는 헬퍼
 /// Dirichlet-유사 방식으로 4개 양수를 생성한 뒤 합계 1.0으로 정규화하고,
@@ -50,7 +49,7 @@ List<double> _generateUncertainDistribution(List<double> rawValues) {
 
 /// 확률 분포로부터 ClassificationSuccess(불확실) 객체를 생성
 ClassificationSuccess _createUncertainResult(List<double> distribution) {
-  final categories = EmotionCategory.values;
+  const categories = EmotionCategory.values;
 
   // 예측 목록 생성
   final predictions = <EmotionPrediction>[];

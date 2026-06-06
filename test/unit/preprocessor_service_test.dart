@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
 import 'package:animind/data/services/preprocessor_service_impl.dart';
-import 'package:animind/domain/models/models.dart';
 
 void main() {
   late PreprocessorServiceImpl service;

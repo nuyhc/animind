@@ -198,8 +198,6 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      // 에러 빌더가 동작하면 대체 아이콘이 표시된다
-      final iconFinder = find.byIcon(Icons.image_not_supported);
       // 테스트 환경에 따라 에러 빌더 트리거 타이밍이 다를 수 있으므로
       // Image 위젯이 존재하는지 확인한다
       expect(find.byType(Image), findsOneWidget);
@@ -222,9 +220,8 @@ void main() {
     });
 
     testWidgets('topThree가 null이면 후보 목록이 표시되지 않는다', (tester) async {
-      final result = createUncertainResult(topThree: null);
       await tester.pumpWidget(createTestApp(
-        result: FormattedResult(
+        result: const FormattedResult(
           sentence: '표정이 분명하지 않아요',
           emoji: '🤔',
           confidencePercent: 35,
@@ -239,13 +236,13 @@ void main() {
 
     testWidgets('topThree가 빈 목록이면 후보 목록이 표시되지 않는다', (tester) async {
       await tester.pumpWidget(createTestApp(
-        result: FormattedResult(
+        result: const FormattedResult(
           sentence: '표정이 분명하지 않아요',
           emoji: '🤔',
           confidencePercent: 35,
           category: EmotionCategory.happy,
           isUncertain: true,
-          topThree: const [],
+          topThree: [],
         ),
       ));
 

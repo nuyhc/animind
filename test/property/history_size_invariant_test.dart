@@ -141,7 +141,7 @@ void main() {
                   reason:
                       'iteration=$iter, N=$n: '
                       '남은 항목의 시간 오프셋($minuteOffset분)은 '
-                      '${expectedOldestMinute}분 이상이어야 한다 (오래된 항목 삭제 확인)',
+                      '$expectedOldestMinute분 이상이어야 한다 (오래된 항목 삭제 확인)',
                 );
               }
             }

@@ -18,12 +18,12 @@ void main() {
 
   group('ResultFormatterImpl - 일반 결과', () {
     test('결과 문장이 "[template] 것 같아요" 형식이어야 한다', () {
-      final result = ClassificationSuccess(
-        topPrediction: const EmotionPrediction(
+      const result = ClassificationSuccess(
+        topPrediction: EmotionPrediction(
           category: EmotionCategory.happy,
           confidence: 0.87,
         ),
-        allPredictions: const [
+        allPredictions: [
           EmotionPrediction(category: EmotionCategory.happy, confidence: 0.87),
           EmotionPrediction(category: EmotionCategory.sad, confidence: 0.08),
           EmotionPrediction(category: EmotionCategory.angry, confidence: 0.03),
@@ -108,12 +108,12 @@ void main() {
     });
 
     test('신뢰도가 정수 백분율로 변환되어야 한다', () {
-      final result = ClassificationSuccess(
-        topPrediction: const EmotionPrediction(
+      const result = ClassificationSuccess(
+        topPrediction: EmotionPrediction(
           category: EmotionCategory.angry,
           confidence: 0.873,
         ),
-        allPredictions: const [
+        allPredictions: [
           EmotionPrediction(category: EmotionCategory.angry, confidence: 0.873),
         ],
         isUncertain: false,
@@ -127,12 +127,12 @@ void main() {
 
     test('신뢰도 반올림이 정확해야 한다', () {
       // 0.555 → 56% (반올림)
-      final result = ClassificationSuccess(
-        topPrediction: const EmotionPrediction(
+      const result = ClassificationSuccess(
+        topPrediction: EmotionPrediction(
           category: EmotionCategory.sad,
           confidence: 0.555,
         ),
-        allPredictions: const [
+        allPredictions: [
           EmotionPrediction(category: EmotionCategory.sad, confidence: 0.555),
         ],
         isUncertain: false,
@@ -144,12 +144,12 @@ void main() {
     });
 
     test('카테고리가 올바르게 전달되어야 한다', () {
-      final result = ClassificationSuccess(
-        topPrediction: const EmotionPrediction(
+      const result = ClassificationSuccess(
+        topPrediction: EmotionPrediction(
           category: EmotionCategory.other,
           confidence: 0.65,
         ),
-        allPredictions: const [
+        allPredictions: [
           EmotionPrediction(category: EmotionCategory.other, confidence: 0.65),
         ],
         isUncertain: false,
@@ -163,12 +163,12 @@ void main() {
 
   group('ResultFormatterImpl - 불확실 결과', () {
     test('불확실 결과는 "표정이 분명하지 않아요" 문구를 생성해야 한다', () {
-      final result = ClassificationSuccess(
-        topPrediction: const EmotionPrediction(
+      const result = ClassificationSuccess(
+        topPrediction: EmotionPrediction(
           category: EmotionCategory.happy,
           confidence: 0.35,
         ),
-        allPredictions: const [
+        allPredictions: [
           EmotionPrediction(category: EmotionCategory.happy, confidence: 0.35),
           EmotionPrediction(category: EmotionCategory.sad, confidence: 0.30),
           EmotionPrediction(category: EmotionCategory.angry, confidence: 0.20),
@@ -184,12 +184,12 @@ void main() {
     });
 
     test('상위 3개 예측 목록이 포함되어야 한다', () {
-      final result = ClassificationSuccess(
-        topPrediction: const EmotionPrediction(
+      const result = ClassificationSuccess(
+        topPrediction: EmotionPrediction(
           category: EmotionCategory.happy,
           confidence: 0.35,
         ),
-        allPredictions: const [
+        allPredictions: [
           EmotionPrediction(category: EmotionCategory.happy, confidence: 0.35),
           EmotionPrediction(category: EmotionCategory.sad, confidence: 0.30),
           EmotionPrediction(category: EmotionCategory.angry, confidence: 0.20),
@@ -205,12 +205,12 @@ void main() {
     });
 
     test('상위 3개 항목에 올바른 이모지, 한국어명, 신뢰도가 포함되어야 한다', () {
-      final result = ClassificationSuccess(
-        topPrediction: const EmotionPrediction(
+      const result = ClassificationSuccess(
+        topPrediction: EmotionPrediction(
           category: EmotionCategory.sad,
           confidence: 0.40,
         ),
-        allPredictions: const [
+        allPredictions: [
           EmotionPrediction(category: EmotionCategory.sad, confidence: 0.40),
           EmotionPrediction(category: EmotionCategory.angry, confidence: 0.30),
           EmotionPrediction(category: EmotionCategory.happy, confidence: 0.20),
@@ -239,12 +239,12 @@ void main() {
     });
 
     test('불확실 결과의 이모지는 최상위 카테고리의 이모지여야 한다', () {
-      final result = ClassificationSuccess(
-        topPrediction: const EmotionPrediction(
+      const result = ClassificationSuccess(
+        topPrediction: EmotionPrediction(
           category: EmotionCategory.other,
           confidence: 0.30,
         ),
-        allPredictions: const [
+        allPredictions: [
           EmotionPrediction(category: EmotionCategory.other, confidence: 0.30),
           EmotionPrediction(category: EmotionCategory.happy, confidence: 0.28),
           EmotionPrediction(category: EmotionCategory.sad, confidence: 0.22),
