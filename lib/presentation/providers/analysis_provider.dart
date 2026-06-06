@@ -90,7 +90,7 @@ class AnalysisNotifier extends Notifier<AnalysisState> {
       return;
     }
 
-    await _runAnalysisFlow(inputResult);
+    await _runAnalysisFlow(inputResult.imageFile);
   }
 
   /// 갤러리 선택을 통한 분석 시작
@@ -105,7 +105,14 @@ class AnalysisNotifier extends Notifier<AnalysisState> {
       return;
     }
 
-    await _runAnalysisFlow(inputResult);
+    await _runAnalysisFlow(inputResult.imageFile);
+  }
+
+  /// 오류 발생 후 동일 이미지로 분석을 재시도한다
+  ///
+  /// 오류 상태에서 보존한 입력 이미지를 다시 분석 흐름에 투입한다.
+  Future<void> retry(File imageFile) async {
+    await _runAnalysisFlow(imageFile);
   }
 
   /// 분석 상태를 idle로 초기화한다
@@ -116,9 +123,7 @@ class AnalysisNotifier extends Notifier<AnalysisState> {
   /// 전체 분석 흐름을 실행한다
   ///
   /// 흐름: 검증 → 메모리 확인 → 전처리 → 분류 → 포맷 → 이력 저장 → 결과 반환
-  Future<void> _runAnalysisFlow(ImageInputResult inputResult) async {
-    final imageFile = inputResult.imageFile;
-
+  Future<void> _runAnalysisFlow(File imageFile) async {
     // 분석 중 상태로 전환 (이미지 미리보기 포함)
     state = AnalysisAnalyzing(imageFile: imageFile);
 
@@ -162,8 +167,9 @@ class AnalysisNotifier extends Notifier<AnalysisState> {
       final preprocessor = ref.read(preprocessorServiceProvider);
       final preprocessedImage = await preprocessor.preprocess(imageFile);
 
-      // 4. 감정 분류
-      final classifier = ref.read(emotionClassifierServiceProvider);
+      // 4. 감정 분류 (모델 초기화 완료를 보장하기 위해 future를 await)
+      final classifier =
+          await ref.read(emotionClassifierServiceProvider.future);
       final classificationResult = await classifier.classify(preprocessedImage);
 
       // 추론 실패 처리

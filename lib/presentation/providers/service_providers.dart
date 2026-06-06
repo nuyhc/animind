@@ -38,11 +38,14 @@ final preprocessorServiceProvider = Provider<PreprocessorService>((ref) {
 /// 감정 분류 서비스 Provider
 ///
 /// TFLite 모델을 사용한 감정 분류 추론을 수행한다.
+/// 모델 자산 로딩(`initialize`)이 비동기이므로 [FutureProvider]로 노출하며,
+/// 최초 사용 시 모델을 1회 로딩한 뒤 준비된 인스턴스를 반환한다.
 /// dispose 시 모델 리소스를 해제한다.
 final emotionClassifierServiceProvider =
-    Provider<EmotionClassifierService>((ref) {
+    FutureProvider<EmotionClassifierService>((ref) async {
   final classifier = EmotionClassifierServiceImpl();
-  ref.onDispose(() => classifier.dispose());
+  await classifier.initialize();
+  ref.onDispose(classifier.dispose);
   return classifier;
 });
 
