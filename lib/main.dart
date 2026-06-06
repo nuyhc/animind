@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:animind/presentation/screens/main_screen.dart';
+
 void main() {
   runApp(const ProviderScope(child: AnimindApp()));
 }
@@ -17,11 +19,7 @@ class AnimindApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      home: const Scaffold(
-        body: Center(
-          child: Text('Animind - 동물 감정 인식'),
-        ),
-      ),
+      home: const MainScreen(),
     );
   }
 }
