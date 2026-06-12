@@ -281,16 +281,19 @@ class DataAugmentor:
         Returns:
             증강된 이미지 numpy 배열
         """
-        # 적용할 증강 기법 목록
+        # 적용할 증강 기법 목록 (모두 입력과 동일한 shape를 유지)
         augmentation_funcs = [
             self._augment_rotation,
             self._augment_horizontal_flip,
             self._augment_brightness,
             self._augment_saturation,
+            self._augment_zoom,
+            self._augment_shift,
+            self._augment_contrast,
         ]
 
-        # 최소 1개, 최대 전체 기법 적용
-        num_augmentations = random.randint(1, len(augmentation_funcs))
+        # 최소 2개, 최대 4개 기법을 무작위 조합 (다양성 확보, 과변형 방지)
+        num_augmentations = random.randint(2, min(4, len(augmentation_funcs)))
         selected = random.sample(augmentation_funcs, num_augmentations)
 
         result = image.copy()
@@ -354,6 +357,73 @@ class DataAugmentor:
         factor = random.uniform(0.8, 1.2)
         pil_image = Image.fromarray(image.astype(np.uint8))
         enhancer = ImageEnhance.Color(pil_image)
+        enhanced = enhancer.enhance(factor)
+        return np.array(enhanced)
+
+    def _augment_zoom(self, image: np.ndarray) -> np.ndarray:
+        """줌(중앙 크롭 후 원본 크기로 확대) 증강: 75~95% 영역 크롭
+
+        피사체 스케일 변화에 대한 강건성을 높인다. 크롭 후 원본 크기로
+        리사이즈하므로 입력과 동일한 shape를 유지한다.
+
+        Args:
+            image: 입력 이미지 numpy 배열
+
+        Returns:
+            줌 증강된 이미지 numpy 배열 (원본과 동일 shape)
+        """
+        height, width = image.shape[:2]
+        crop_ratio = random.uniform(0.75, 0.95)
+        crop_h = max(1, int(height * crop_ratio))
+        crop_w = max(1, int(width * crop_ratio))
+        top = random.randint(0, height - crop_h)
+        left = random.randint(0, width - crop_w)
+        cropped = image[top : top + crop_h, left : left + crop_w]
+        pil_image = Image.fromarray(cropped.astype(np.uint8))
+        resized = pil_image.resize((width, height), Image.BILINEAR)
+        return np.array(resized)
+
+    def _augment_shift(self, image: np.ndarray) -> np.ndarray:
+        """평행 이동 증강: 최대 ±10% (수평/수직)
+
+        피사체 위치 변화에 대한 강건성을 높인다. 빈 영역은 검은색으로
+        채우며 입력과 동일한 shape를 유지한다.
+
+        Args:
+            image: 입력 이미지 numpy 배열
+
+        Returns:
+            이동된 이미지 numpy 배열 (원본과 동일 shape)
+        """
+        height, width = image.shape[:2]
+        max_dx = int(width * 0.1)
+        max_dy = int(height * 0.1)
+        dx = random.randint(-max_dx, max_dx) if max_dx > 0 else 0
+        dy = random.randint(-max_dy, max_dy) if max_dy > 0 else 0
+        pil_image = Image.fromarray(image.astype(np.uint8))
+        shifted = pil_image.transform(
+            (width, height),
+            Image.AFFINE,
+            (1, 0, -dx, 0, 1, -dy),
+            resample=Image.BILINEAR,
+            fillcolor=(0, 0, 0),
+        )
+        return np.array(shifted)
+
+    def _augment_contrast(self, image: np.ndarray) -> np.ndarray:
+        """대비 조절 증강: ±25%
+
+        조명/대비 변화에 대한 강건성을 높인다.
+
+        Args:
+            image: 입력 이미지 numpy 배열
+
+        Returns:
+            대비 조절된 이미지 numpy 배열
+        """
+        factor = random.uniform(0.75, 1.25)
+        pil_image = Image.fromarray(image.astype(np.uint8))
+        enhancer = ImageEnhance.Contrast(pil_image)
         enhanced = enhancer.enhance(factor)
         return np.array(enhanced)
 

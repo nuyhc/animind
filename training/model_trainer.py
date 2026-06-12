@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field
-from pathlib import Path
+import random
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import numpy as np
@@ -21,9 +21,10 @@ from sklearn.metrics import (
     confusion_matrix,
     f1_score,
 )
+from sklearn.utils.class_weight import compute_class_weight
 from tensorflow import keras
 
-from training.data_augmentor import CATEGORIES, DataAugmentor
+from training.data_augmentor import CATEGORIES
 
 
 # 모델 입력 크기
@@ -101,11 +102,13 @@ class ModelTrainer:
         self._seed = seed
         self._model_version = model_version
         self._model: Optional[keras.Model] = None
+        self._base_model: Optional[keras.Model] = None
         self._history: Optional[keras.callbacks.History] = None
 
-        # 재현성 설정
+        # 재현성 설정 (tf, numpy, 표준 random 모두 시드 고정)
         tf.random.set_seed(seed)
         np.random.seed(seed)
+        random.seed(seed)
 
     @property
     def model(self) -> Optional[keras.Model]:
@@ -126,8 +129,19 @@ class ModelTrainer:
         """MobileNetV2 기반 분류 모델을 생성한다 (Req 6.1)
 
         구조:
-        - Base: MobileNetV2 (ImageNet 사전학습, 동결)
-        - Head: GlobalAveragePooling2D → Dense(128, relu) → Dropout(0.3) → Dense(4, softmax)
+        - Input: [0.0, 1.0] 정규화 이미지 (Flutter 전처리 출력과 동일한 스케일)
+        - Rescaling: [0,1] → [-1,1] (MobileNetV2 ImageNet 가중치가 기대하는 입력 범위)
+        - Base: MobileNetV2 (ImageNet 사전학습)
+        - Head: GAP → Dropout(0.5) → Dense(64, relu) → Dropout(0.5) → Dense(4, logits)
+
+        전처리(Rescaling)를 모델 내부에 포함하여, 앱이 [0,1] 입력을 그대로
+        전달해도 base가 올바른 [-1,1] 입력을 받도록 보장한다. 이로써 사전학습
+        특징이 정상적으로 동작하며 온디바이스 추론과의 전처리 일관성도 유지된다.
+
+        출력층은 softmax가 아니라 **logits**(활성화 없음)를 내보낸다. softmax는
+        학습 손실(from_logits=True)과 온디바이스 추론(앱의 분류 서비스)에서 각각
+        한 번씩만 적용된다. 모델에 softmax를 두면 앱에서 이중 적용되어 신뢰도가
+        비정상적으로 눌리므로, 계약상 모델은 logits만 출력한다.
 
         Returns:
             컴파일되지 않은 Keras 모델
@@ -139,76 +153,196 @@ class ModelTrainer:
             input_shape=INPUT_SHAPE,
         )
 
-        # 기본 모델의 가중치를 동결 (전이 학습)
+        # 기본 모델의 가중치를 동결 (1단계 전이 학습) - 파인튜닝 단계에서 일부 해제
         base_model.trainable = False
+        self._base_model = base_model
 
-        # 분류 헤드 추가
-        model = keras.Sequential(
-            [
-                base_model,
-                keras.layers.GlobalAveragePooling2D(),
-                keras.layers.Dense(128, activation="relu"),
-                keras.layers.Dropout(0.3),
-                keras.layers.Dense(NUM_CLASSES, activation="softmax"),
-            ],
-            name="animal_emotion_classifier",
-        )
+        # 함수형 API로 전처리(Rescaling)를 모델 내부에 포함
+        # 소규모 데이터 과적합 억제를 위해 헤드를 축소하고 dropout/L2를 강화한다.
+        inputs = keras.Input(shape=INPUT_SHAPE)
+        x = keras.layers.Rescaling(scale=2.0, offset=-1.0)(inputs)
+        # base는 BatchNorm 통계를 추론 모드로 고정 (소규모 데이터 전이학습 권장 방식)
+        x = base_model(x, training=False)
+        x = keras.layers.GlobalAveragePooling2D()(x)
+        x = keras.layers.Dropout(0.5)(x)
+        x = keras.layers.Dense(
+            64,
+            activation="relu",
+            kernel_regularizer=keras.regularizers.l2(1e-4),
+        )(x)
+        x = keras.layers.Dropout(0.5)(x)
+        # 출력은 logits (활성화 없음). softmax는 학습 손실/온디바이스 추론에서 적용한다.
+        outputs = keras.layers.Dense(NUM_CLASSES, activation=None)(x)
+
+        model = keras.Model(inputs, outputs, name="animal_emotion_classifier")
 
         self._model = model
         return model
+
+    def _compute_class_weight(
+        self, labels_onehot: np.ndarray
+    ) -> dict[int, float]:
+        """원핫 레이블로부터 균형 클래스 가중치를 계산한다
+
+        소수/난이도 높은 클래스(예: Other)의 학습 신호를 보강하기 위해
+        'balanced' 전략으로 클래스별 가중치를 산출한다.
+
+        Args:
+            labels_onehot: 원핫 인코딩 레이블 배열 [N, NUM_CLASSES]
+
+        Returns:
+            {클래스 인덱스: 가중치} 딕셔너리 (모든 클래스 포함)
+        """
+        y = np.argmax(labels_onehot, axis=1)
+        present = np.unique(y)
+        weights = compute_class_weight(
+            class_weight="balanced", classes=present, y=y
+        )
+        class_weight: dict[int, float] = {idx: 1.0 for idx in range(NUM_CLASSES)}
+        for cls, weight in zip(present, weights):
+            class_weight[int(cls)] = float(weight)
+        return class_weight
 
     def train(
         self,
         train_data: tuple[np.ndarray, np.ndarray],
         valid_data: tuple[np.ndarray, np.ndarray],
-        epochs: int = 50,
+        epochs: int = 25,
         batch_size: int = 32,
+        fine_tune_epochs: int = 15,
+        fine_tune_at: int = 100,
+        class_weight: Optional[dict[int, float]] = None,
     ) -> keras.callbacks.History:
-        """모델을 학습한다 (Req 6.1, 6.7)
+        """모델을 2단계 전이 학습으로 학습한다 (Req 6.1, 6.7)
 
-        Adam 옵티마이저와 categorical_crossentropy 손실 함수를 사용하며,
-        조기 종료(patience=5, val_loss 기준)를 적용한다.
+        1단계 (헤드 학습): base 동결, Adam(1e-3)으로 분류 헤드만 학습.
+        2단계 (파인튜닝): base 상위 레이어 해제, Adam(1e-5)으로 미세 조정.
+            (BatchNorm 레이어는 추론 모드로 고정하여 소규모 데이터 과적합 방지)
+
+        두 단계 모두 label smoothing, 클래스 가중치, 조기 종료(val_loss),
+        ReduceLROnPlateau를 적용한다.
 
         Args:
             train_data: (학습 이미지 배열, 원핫 인코딩 레이블) 튜플
             valid_data: (검증 이미지 배열, 원핫 인코딩 레이블) 튜플
-            epochs: 최대 학습 에포크 수 (기본값 50)
+            epochs: 1단계(헤드) 최대 에포크 수 (기본값 25)
             batch_size: 배치 크기 (기본값 32)
+            fine_tune_epochs: 2단계(파인튜닝) 최대 에포크 수 (기본값 15)
+            fine_tune_at: 이 인덱스 이전 base 레이어는 동결 유지 (기본값 100)
+            class_weight: 클래스 가중치 (None이면 'balanced'로 자동 계산)
 
         Returns:
-            학습 히스토리 객체
+            파인튜닝 단계의 학습 히스토리 객체
         """
         if self._model is None:
             self.build_model()
+        if self._model is None or self._base_model is None:
+            raise RuntimeError("모델 빌드에 실패했습니다.")
 
-        assert self._model is not None
-
-        # 모델 컴파일
-        self._model.compile(
-            optimizer=keras.optimizers.Adam(),
-            loss="categorical_crossentropy",
-            metrics=["accuracy"],
-        )
-
-        # 조기 종료 콜백 설정 (Req 6.7)
-        early_stopping = keras.callbacks.EarlyStopping(
-            monitor="val_loss",
-            patience=5,
-            restore_best_weights=True,
-        )
-
-        # 학습 데이터 언패킹
         train_images, train_labels = train_data
         valid_images, valid_labels = valid_data
 
-        # 모델 학습 실행
-        self._history = self._model.fit(
-            train_images,
-            train_labels,
+        # 클래스 가중치 자동 계산 (Other 등 난이도 높은 클래스 보강)
+        if class_weight is None:
+            class_weight = self._compute_class_weight(train_labels)
+
+        # 모델이 logits를 출력하므로 from_logits=True로 손실 내부에서 softmax를 적용한다.
+        loss_fn = keras.losses.CategoricalCrossentropy(
+            from_logits=True, label_smoothing=0.1
+        )
+
+        def _callbacks(min_lr: float) -> list[keras.callbacks.Callback]:
+            return [
+                keras.callbacks.EarlyStopping(
+                    monitor="val_loss", patience=5, restore_best_weights=True
+                ),
+                keras.callbacks.ReduceLROnPlateau(
+                    monitor="val_loss", factor=0.5, patience=3, min_lr=min_lr
+                ),
+            ]
+
+        # On-the-fly 증강 파이프라인: 매 에포크마다 서로 다른 변형을 생성하여
+        # 소규모 고유 이미지에 대한 과적합을 완화한다. 추론 시에는 비활성(항등)이며
+        # 모델 외부(tf.data)에서만 적용하므로 내보내는 모델 그래프는 깨끗하게 유지된다.
+        augmentation = keras.Sequential(
+            [
+                keras.layers.RandomFlip("horizontal", seed=self._seed),
+                keras.layers.RandomRotation(
+                    0.12, fill_mode="constant", seed=self._seed
+                ),
+                keras.layers.RandomZoom(
+                    0.15, fill_mode="constant", seed=self._seed
+                ),
+                keras.layers.RandomTranslation(
+                    0.1, 0.1, fill_mode="constant", seed=self._seed
+                ),
+                keras.layers.RandomContrast(0.15, seed=self._seed),
+            ],
+            name="train_augmentation",
+        )
+
+        autotune = tf.data.AUTOTUNE
+        train_ds = (
+            tf.data.Dataset.from_tensor_slices((train_images, train_labels))
+            .shuffle(
+                buffer_size=len(train_images),
+                seed=self._seed,
+                reshuffle_each_iteration=True,
+            )
+            .batch(batch_size)
+            .map(
+                lambda x, y: (augmentation(x, training=True), y),
+                num_parallel_calls=autotune,
+            )
+            .prefetch(autotune)
+        )
+        valid_ds = (
+            tf.data.Dataset.from_tensor_slices((valid_images, valid_labels))
+            .batch(batch_size)
+            .prefetch(autotune)
+        )
+
+        # ---- 1단계: 분류 헤드 학습 (base 동결) ----
+        self._base_model.trainable = False
+        self._model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=1e-3),
+            loss=loss_fn,
+            metrics=["accuracy"],
+        )
+        print("[정보] 1단계 학습 시작 (헤드 학습, base 동결, on-the-fly 증강)")
+        self._model.fit(
+            train_ds,
             epochs=epochs,
-            batch_size=batch_size,
-            validation_data=(valid_images, valid_labels),
-            callbacks=[early_stopping],
+            validation_data=valid_ds,
+            callbacks=_callbacks(min_lr=1e-6),
+            class_weight=class_weight,
+            verbose=1,
+        )
+
+        # ---- 2단계: 파인튜닝 (base 상위 레이어 해제) ----
+        self._base_model.trainable = True
+        for layer in self._base_model.layers[:fine_tune_at]:
+            layer.trainable = False
+        # BatchNorm은 추론 모드 유지를 위해 동결 (소규모 데이터 전이학습 권장)
+        for layer in self._base_model.layers:
+            if isinstance(layer, keras.layers.BatchNormalization):
+                layer.trainable = False
+
+        self._model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=1e-5),
+            loss=loss_fn,
+            metrics=["accuracy"],
+        )
+        print(
+            f"[정보] 2단계 파인튜닝 시작 "
+            f"(base 레이어 {fine_tune_at}번 이후 학습, BatchNorm 동결)"
+        )
+        self._history = self._model.fit(
+            train_ds,
+            epochs=fine_tune_epochs,
+            validation_data=valid_ds,
+            callbacks=_callbacks(min_lr=1e-7),
+            class_weight=class_weight,
             verbose=1,
         )
 

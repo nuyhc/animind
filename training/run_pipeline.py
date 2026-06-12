@@ -8,7 +8,13 @@
 """
 
 import os
+import random
 import sys
+
+import numpy as np
+
+# 재현성을 위한 전역 시드 (증강은 표준 random 모듈에 의존하므로 학습 이전에 고정)
+SEED = 42
 
 # 프로젝트 루트를 기준으로 경로 설정
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -29,6 +35,10 @@ def main():
     print("동물 감정 인식 - 학습 파이프라인 실행")
     print("=" * 60)
 
+    # 0. 전역 시드 고정 (증강 단계 이전에 수행해야 재현성 보장)
+    random.seed(SEED)
+    np.random.seed(SEED)
+
     # 1. 데이터 증강
     print("\n[1/5] 데이터 증강 중...")
     augmentor = DataAugmentor(DATASET_PATH)
@@ -40,7 +50,7 @@ def main():
 
     # 2. 모델 학습 데이터 준비
     print("\n[2/5] 학습 데이터 준비 중...")
-    trainer = ModelTrainer(dataset_path=DATASET_PATH, seed=42, model_version="1.0.0")
+    trainer = ModelTrainer(dataset_path=DATASET_PATH, seed=SEED, model_version="1.0.0")
 
     # 학습 데이터 변환 (numpy 배열)
     train_images, train_labels = trainer.prepare_data(train_data)
@@ -57,16 +67,18 @@ def main():
     print(f"  검증 이미지 형태: {valid_images.shape}")
     print(f"  테스트 이미지 형태: {test_images.shape}")
 
-    # 3. 모델 학습
+    # 3. 모델 학습 (2단계: 헤드 학습 → 상위 레이어 파인튜닝)
     print("\n[3/5] 모델 학습 중...")
     trainer.build_model()
     history = trainer.train(
         train_data=(train_images, train_labels),
         valid_data=(valid_images, valid_labels),
-        epochs=50,
+        epochs=25,
         batch_size=32,
+        fine_tune_epochs=15,
+        fine_tune_at=100,
     )
-    print(f"  학습 완료 (에포크 수: {len(history.history['loss'])})")
+    print(f"  파인튜닝 단계 에포크 수: {len(history.history['loss'])}")
 
     # 4. 평가
     print("\n[4/5] 모델 평가 중...")
