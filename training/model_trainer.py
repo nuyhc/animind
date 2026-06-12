@@ -126,13 +126,18 @@ class ModelTrainer:
         return self._model_version
 
     def build_model(self) -> keras.Model:
-        """MobileNetV2 기반 분류 모델을 생성한다 (Req 6.1)
+        """EfficientNetV2B0 기반 분류 모델을 생성한다 (Req 6.1)
 
         구조:
         - Input: [0.0, 1.0] 정규화 이미지 (Flutter 전처리 출력과 동일한 스케일)
-        - Rescaling: [0,1] → [-1,1] (MobileNetV2 ImageNet 가중치가 기대하는 입력 범위)
-        - Base: MobileNetV2 (ImageNet 사전학습)
-        - Head: GAP → Dropout(0.5) → Dense(64, relu) → Dropout(0.5) → Dense(4, logits)
+        - Rescaling: [0,1] → [-1,1] (EfficientNetV2 가중치가 기대하는 입력 범위)
+        - Base: EfficientNetV2B0 (ImageNet 사전학습, 내장 전처리 비활성)
+        - Head: GAP → Dropout(0.3) → Dense(4, logits)
+
+        백본은 동급 크기에서 MobileNetV2보다 미세한 시각 차이(표정)를 더 잘
+        구분하는 EfficientNetV2B0를 사용한다. 헤드는 병목(Dense 64) 없이
+        GAP 특징을 곧바로 분류층에 연결한다 — 소규모 데이터에서 과한 병목과
+        이중 dropout(0.5)은 학습 부족(underfit)을 유발했다.
 
         전처리(Rescaling)를 모델 내부에 포함하여, 앱이 [0,1] 입력을 그대로
         전달해도 base가 올바른 [-1,1] 입력을 받도록 보장한다. 이로써 사전학습
@@ -146,10 +151,12 @@ class ModelTrainer:
         Returns:
             컴파일되지 않은 Keras 모델
         """
-        # MobileNetV2 기본 모델 (ImageNet 사전학습 가중치, 분류 헤드 제외)
-        base_model = keras.applications.MobileNetV2(
+        # EfficientNetV2B0 기본 모델 (ImageNet 사전학습 가중치, 분류 헤드 제외)
+        # include_preprocessing=False: 입력 스케일링은 모델 앞단 Rescaling이 담당
+        base_model = keras.applications.EfficientNetV2B0(
             weights="imagenet",
             include_top=False,
+            include_preprocessing=False,
             input_shape=INPUT_SHAPE,
         )
 
@@ -158,19 +165,12 @@ class ModelTrainer:
         self._base_model = base_model
 
         # 함수형 API로 전처리(Rescaling)를 모델 내부에 포함
-        # 소규모 데이터 과적합 억제를 위해 헤드를 축소하고 dropout/L2를 강화한다.
         inputs = keras.Input(shape=INPUT_SHAPE)
         x = keras.layers.Rescaling(scale=2.0, offset=-1.0)(inputs)
         # base는 BatchNorm 통계를 추론 모드로 고정 (소규모 데이터 전이학습 권장 방식)
         x = base_model(x, training=False)
         x = keras.layers.GlobalAveragePooling2D()(x)
-        x = keras.layers.Dropout(0.5)(x)
-        x = keras.layers.Dense(
-            64,
-            activation="relu",
-            kernel_regularizer=keras.regularizers.l2(1e-4),
-        )(x)
-        x = keras.layers.Dropout(0.5)(x)
+        x = keras.layers.Dropout(0.3)(x)
         # 출력은 logits (활성화 없음). softmax는 학습 손실/온디바이스 추론에서 적용한다.
         outputs = keras.layers.Dense(NUM_CLASSES, activation=None)(x)
 
@@ -207,16 +207,16 @@ class ModelTrainer:
         self,
         train_data: tuple[np.ndarray, np.ndarray],
         valid_data: tuple[np.ndarray, np.ndarray],
-        epochs: int = 25,
+        epochs: int = 30,
         batch_size: int = 32,
-        fine_tune_epochs: int = 15,
-        fine_tune_at: int = 100,
+        fine_tune_epochs: int = 40,
+        fine_tune_at: Optional[int] = None,
         class_weight: Optional[dict[int, float]] = None,
     ) -> keras.callbacks.History:
         """모델을 2단계 전이 학습으로 학습한다 (Req 6.1, 6.7)
 
         1단계 (헤드 학습): base 동결, Adam(1e-3)으로 분류 헤드만 학습.
-        2단계 (파인튜닝): base 상위 레이어 해제, Adam(1e-5)으로 미세 조정.
+        2단계 (파인튜닝): base 상위 레이어 해제, Adam(5e-5)으로 미세 조정.
             (BatchNorm 레이어는 추론 모드로 고정하여 소규모 데이터 과적합 방지)
 
         두 단계 모두 label smoothing, 클래스 가중치, 조기 종료(val_loss),
@@ -225,10 +225,11 @@ class ModelTrainer:
         Args:
             train_data: (학습 이미지 배열, 원핫 인코딩 레이블) 튜플
             valid_data: (검증 이미지 배열, 원핫 인코딩 레이블) 튜플
-            epochs: 1단계(헤드) 최대 에포크 수 (기본값 25)
+            epochs: 1단계(헤드) 최대 에포크 수 (기본값 30)
             batch_size: 배치 크기 (기본값 32)
-            fine_tune_epochs: 2단계(파인튜닝) 최대 에포크 수 (기본값 15)
-            fine_tune_at: 이 인덱스 이전 base 레이어는 동결 유지 (기본값 100)
+            fine_tune_epochs: 2단계(파인튜닝) 최대 에포크 수 (기본값 40)
+            fine_tune_at: 이 인덱스 이전 base 레이어는 동결 유지
+                (None이면 base 하위 1/3 동결)
             class_weight: 클래스 가중치 (None이면 'balanced'로 자동 계산)
 
         Returns:
@@ -251,10 +252,14 @@ class ModelTrainer:
             from_logits=True, label_smoothing=0.1
         )
 
-        def _callbacks(min_lr: float) -> list[keras.callbacks.Callback]:
+        def _callbacks(
+            min_lr: float, patience: int
+        ) -> list[keras.callbacks.Callback]:
             return [
                 keras.callbacks.EarlyStopping(
-                    monitor="val_loss", patience=5, restore_best_weights=True
+                    monitor="val_loss",
+                    patience=patience,
+                    restore_best_weights=True,
                 ),
                 keras.callbacks.ReduceLROnPlateau(
                     monitor="val_loss", factor=0.5, patience=3, min_lr=min_lr
@@ -277,6 +282,9 @@ class ModelTrainer:
                     0.1, 0.1, fill_mode="constant", seed=self._seed
                 ),
                 keras.layers.RandomContrast(0.15, seed=self._seed),
+                keras.layers.RandomBrightness(
+                    0.15, value_range=(0.0, 1.0), seed=self._seed
+                ),
             ],
             name="train_augmentation",
         )
@@ -314,12 +322,16 @@ class ModelTrainer:
             train_ds,
             epochs=epochs,
             validation_data=valid_ds,
-            callbacks=_callbacks(min_lr=1e-6),
+            callbacks=_callbacks(min_lr=1e-6, patience=6),
             class_weight=class_weight,
             verbose=1,
         )
 
         # ---- 2단계: 파인튜닝 (base 상위 레이어 해제) ----
+        # fine_tune_at 미지정 시 base 하위 1/3은 동결 유지 (저수준 특징 보존)
+        if fine_tune_at is None:
+            fine_tune_at = len(self._base_model.layers) // 3
+
         self._base_model.trainable = True
         for layer in self._base_model.layers[:fine_tune_at]:
             layer.trainable = False
@@ -329,7 +341,7 @@ class ModelTrainer:
                 layer.trainable = False
 
         self._model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=1e-5),
+            optimizer=keras.optimizers.Adam(learning_rate=5e-5),
             loss=loss_fn,
             metrics=["accuracy"],
         )
@@ -341,7 +353,7 @@ class ModelTrainer:
             train_ds,
             epochs=fine_tune_epochs,
             validation_data=valid_ds,
-            callbacks=_callbacks(min_lr=1e-7),
+            callbacks=_callbacks(min_lr=1e-7, patience=8),
             class_weight=class_weight,
             verbose=1,
         )
