@@ -59,11 +59,15 @@ class FakeImagePickerPlatform extends Fake
   /// pickImage 호출 시 반환할 파일 (null이면 취소)
   XFile? pickImageResult;
 
+  /// 마지막 호출에 전달된 픽커 옵션 (해상도 제한 검증용)
+  ImagePickerOptions? lastOptions;
+
   @override
   Future<XFile?> getImageFromSource({
     required ImageSource source,
     ImagePickerOptions options = const ImagePickerOptions(),
   }) async {
+    lastOptions = options;
     return pickImageResult;
   }
 
@@ -178,6 +182,33 @@ void main() {
         }
       }
     });
+
+    test('카메라 촬영 시 픽커에 해상도 제한을 전달해야 한다', () async {
+      final testImage = await createTestImage();
+
+      try {
+        fakePermissionHandler.permissionResults = {
+          Permission.camera: PermissionStatus.granted,
+        };
+        fakeImagePicker.pickImageResult = XFile(testImage.path);
+
+        await service.captureFromCamera();
+
+        // 고해상도 원본 유입으로 인한 메모리 급증 방지 (회귀 방지)
+        expect(
+          fakeImagePicker.lastOptions?.maxWidth,
+          equals(ImageInputServiceImpl.maxPickDimension),
+        );
+        expect(
+          fakeImagePicker.lastOptions?.maxHeight,
+          equals(ImageInputServiceImpl.maxPickDimension),
+        );
+      } finally {
+        if (await testImage.exists()) {
+          await testImage.delete();
+        }
+      }
+    });
   });
 
   group('ImageInputServiceImpl - 갤러리 선택', () {
@@ -192,6 +223,33 @@ void main() {
 
       // 취소 시 null 반환, 오류 없음 (Requirements 1.7)
       expect(result, isNull);
+    });
+
+    test('갤러리 선택 시 픽커에 해상도 제한을 전달해야 한다', () async {
+      final testImage = await createTestImage();
+
+      try {
+        fakePermissionHandler.permissionResults = {
+          Permission.photos: PermissionStatus.granted,
+        };
+        fakeImagePicker.pickImageResult = XFile(testImage.path);
+
+        await service.pickFromGallery();
+
+        // 고해상도 원본 유입으로 인한 메모리 급증 방지 (회귀 방지)
+        expect(
+          fakeImagePicker.lastOptions?.maxWidth,
+          equals(ImageInputServiceImpl.maxPickDimension),
+        );
+        expect(
+          fakeImagePicker.lastOptions?.maxHeight,
+          equals(ImageInputServiceImpl.maxPickDimension),
+        );
+      } finally {
+        if (await testImage.exists()) {
+          await testImage.delete();
+        }
+      }
     });
 
     test('갤러리/사진 권한 거부 시 null을 반환해야 한다', () async {

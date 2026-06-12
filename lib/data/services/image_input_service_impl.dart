@@ -13,6 +13,13 @@ import 'package:animind/data/services/image_validator.dart';
 /// image_picker 패키지를 통해 카메라/갤러리에서 이미지를 가져오고,
 /// permission_handler 패키지로 권한을 관리한다.
 class ImageInputServiceImpl implements ImageInputService {
+  /// 입력 이미지 최대 변 길이 (px)
+  ///
+  /// 모델 입력이 224×224이므로 원본 해상도가 필요 없다.
+  /// 고해상도(예: 48MP) 원본을 그대로 받으면 전처리 디코딩 시
+  /// 메모리 사용량이 수백 MB까지 치솟으므로 픽커 단계에서 축소한다.
+  static const double maxPickDimension = 1024;
+
   final ImagePicker _imagePicker;
   final ImageValidator _imageValidator;
 
@@ -31,9 +38,11 @@ class ImageInputServiceImpl implements ImageInputService {
       return null;
     }
 
-    // 카메라 촬영
+    // 카메라 촬영 (메모리 절약을 위해 해상도 제한)
     final XFile? pickedFile = await _imagePicker.pickImage(
       source: ImageSource.camera,
+      maxWidth: maxPickDimension,
+      maxHeight: maxPickDimension,
     );
 
     // 사용자가 촬영을 취소한 경우 null 반환
@@ -56,9 +65,11 @@ class ImageInputServiceImpl implements ImageInputService {
       return null;
     }
 
-    // 갤러리에서 이미지 선택
+    // 갤러리에서 이미지 선택 (메모리 절약을 위해 해상도 제한)
     final XFile? pickedFile = await _imagePicker.pickImage(
       source: ImageSource.gallery,
+      maxWidth: maxPickDimension,
+      maxHeight: maxPickDimension,
     );
 
     // 사용자가 선택을 취소한 경우 null 반환

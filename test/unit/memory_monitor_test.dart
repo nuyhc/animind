@@ -39,10 +39,10 @@ void main() {
 
     group('isUnderMemoryPressure', () {
       test('OS 경고가 없고 메모리 사용량이 낮으면 false를 반환한다', () async {
-        // 테스트 환경에서는 일반적으로 180MB 이하이므로 false 기대
+        // 테스트 환경에서는 일반적으로 임계치(450MB) 이하이므로 false 기대
         final isUnderPressure = await monitor.isUnderMemoryPressure();
 
-        // 테스트 프로세스가 180MB 미만이라고 가정
+        // 테스트 프로세스가 임계치 미만이라고 가정
         // 실제 환경에서는 달라질 수 있으나, 일반적인 테스트 환경에서는 이 조건 충족
         expect(isUnderPressure, isA<bool>());
       });
@@ -132,12 +132,19 @@ void main() {
         expect(monitor, isA<MemoryMonitor>());
       });
 
-      test('memoryBudgetMB 상수가 200이다', () {
-        expect(MemoryMonitor.memoryBudgetMB, equals(200));
+      test('memoryBudgetMB 상수가 500이다', () {
+        expect(MemoryMonitor.memoryBudgetMB, equals(500));
       });
 
-      test('cacheCleanThresholdMB 상수가 180이다', () {
-        expect(MemoryMonitor.cacheCleanThresholdMB, equals(180));
+      test('cacheCleanThresholdMB 상수가 450이다', () {
+        expect(MemoryMonitor.cacheCleanThresholdMB, equals(450));
+      });
+
+      test('캐시 정리 임계치는 메모리 예산의 90%이다', () {
+        expect(
+          MemoryMonitor.cacheCleanThresholdMB,
+          equals(MemoryMonitor.memoryBudgetMB * 9 ~/ 10),
+        );
       });
     });
   });

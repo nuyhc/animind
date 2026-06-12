@@ -5,11 +5,16 @@ import '../models/memory_status.dart';
 /// 기기 전체의 가용 메모리는 플랫폼(특히 iOS)에서 신뢰성 있게 노출되지 않으므로,
 /// 앱 자체 사용량(RSS)과 OS 메모리 경고 이벤트를 기준으로 판단한다.
 abstract class MemoryMonitor {
-  /// 메모리 예산 (200MB)
-  static const int memoryBudgetMB = 200;
+  /// 메모리 예산 (500MB)
+  ///
+  /// iOS release 빌드는 Flutter 엔진 + Impeller + TFLite만으로 RSS가
+  /// 150MB를 넘고, OS가 여유 메모리를 적극 회수하지 않아 RSS는 높게
+  /// 유지된다. 따라서 RSS 임계치는 보조 신호이며, 1차 신호는
+  /// OS 메모리 경고(didHaveMemoryPressure)다.
+  static const int memoryBudgetMB = 500;
 
-  /// 캐시 정리 임계치 (메모리 예산의 90% = 180MB)
-  static const int cacheCleanThresholdMB = 180;
+  /// 캐시 정리 임계치 (메모리 예산의 90% = 450MB)
+  static const int cacheCleanThresholdMB = 450;
 
   /// 현재 앱의 메모리 사용량(MB, RSS 기준)을 반환한다
   Future<int> getAppMemoryUsageMB();

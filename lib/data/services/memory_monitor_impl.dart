@@ -57,7 +57,7 @@ class MemoryMonitorImpl extends MemoryMonitor with WidgetsBindingObserver {
   /// 메모리 압박 여부를 확인한다
   ///
   /// 다음 조건 중 하나라도 충족되면 메모리 압박 상태로 판단한다:
-  /// 1. 현재 RSS 사용량이 cacheCleanThresholdMB(180MB) 초과
+  /// 1. 현재 RSS 사용량이 cacheCleanThresholdMB(450MB) 초과
   /// 2. OS 메모리 경고가 최근에 수신됨 (유효 기간 내)
   @override
   Future<bool> isUnderMemoryPressure() async {
