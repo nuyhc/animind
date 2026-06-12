@@ -83,6 +83,9 @@ web/
 *.pb
 *.keras
 
+# 단, 앱 배포용 모델은 포함 (클론 후 바로 실행 가능하도록)
+!assets/models/emotion_model.tflite
+
 # 학습 산출물 (생성물)
 training/output/
 

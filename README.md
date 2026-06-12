@@ -52,8 +52,9 @@ flutter pub get
 flutter run            # 연결된 Android/iOS 기기 또는 에뮬레이터
 ```
 
-> 실제 감정 분류에는 `assets/models/emotion_model.tflite` 모델 자산이 필요하다.
-> 모델은 아래 학습 파이프라인으로 생성한다(대용량이라 저장소에서는 제외됨).
+> 감정 분류 모델(`assets/models/emotion_model.tflite`, 약 22MB)은 저장소에
+> 포함되어 있어 클론 후 바로 실행할 수 있다. 모델을 다시 학습하려면
+> 아래 학습 파이프라인을 사용한다.
 
 ## 테스트
 
